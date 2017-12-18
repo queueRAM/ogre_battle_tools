@@ -37,9 +37,21 @@ struct level2_header
    uint16_t next_header_size;
 } __attribute__((packed));
 
+#define LHA_EXE "lha"
+void extract_lha(const char *dir, const char *file)
+{
+   char command[FILENAME_MAX];
+   sprintf(command, "%s x -w %s %s", LHA_EXE, dir, file);
+   int status = system(command);
+   if (status) {
+      printf("Error %d running %s\n", status, command);
+   }
+}
+
 int dump_lha(const uint8_t *data, int offset)
 {
    char out_path[FILENAME_MAX];
+   char extract_dir[FILENAME_MAX];
    struct lha_header *hdr = (struct lha_header*)&data[offset];
    char method[6];
    char date_str[128];
@@ -74,14 +86,17 @@ int dump_lha(const uint8_t *data, int offset)
             printf("%c\n", l2hdr->os_id);
             break;
          }
-         default:
-            printf("ERROR: unknown level %d\n", hdr->level_identifier);
-            break;
       }
+      // output LHA
       sprintf(out_path, "%s/%08X.lha", OUTPUT_DIR, offset);
       write_file(out_path, &data[offset], hdr->compressed_size + hdr->header_length);
+
+      // extract LHA
+      sprintf(extract_dir, "%s/%08X", OUTPUT_DIR, offset);
+      make_dir(extract_dir);
+      extract_lha(extract_dir, out_path);
    } else {
-      printf("Unknown level identifier: %02X\n", hdr->level_identifier);
+      printf("Warning: unknown level identifier: %02X\n", hdr->level_identifier);
       return 0;
    }
    return 1;
