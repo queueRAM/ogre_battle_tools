@@ -9,6 +9,20 @@
 
 #define OUTPUT_DIR "ogre_dump"
 
+// LHA level 1
+struct level1_header
+{
+   uint8_t filename_length;
+};
+
+// LHA level 2
+struct level2_header
+{
+   uint16_t uncompressed_crc;
+   uint8_t os_id;
+   uint16_t next_header_size;
+};
+
 // common LHA header
 struct lha_header
 {
@@ -19,23 +33,11 @@ struct lha_header
    uint32_t date;
    uint8_t file_attribute;
    uint8_t level_identifier;
-} __attribute__((packed));
-
-// LHA level 1
-struct level1_header
-{
-   struct lha_header lha;
-   uint8_t filename_length;
-} __attribute__((packed));
-
-// LHA level 2
-struct level2_header
-{
-   struct lha_header lha;
-   uint16_t uncompressed_crc;
-   uint8_t os_id;
-   uint16_t next_header_size;
-} __attribute__((packed));
+   union {
+      struct level1_header l1;
+      struct level2_header l2;
+   };
+};
 
 #define LHA_EXE "lha"
 void extract_lha(const char *dir, const char *file)
@@ -48,55 +50,76 @@ void extract_lha(const char *dir, const char *file)
    }
 }
 
+void lha_header_parse(struct lha_header *hdr, const uint8_t *data)
+{
+   hdr->header_length = read_u16_le(data);
+   memcpy(hdr->method, data + 2, sizeof(hdr->method));
+   hdr->compressed_size = read_u32_le(data + 7);
+   hdr->uncompressed_size = read_u32_le(data + 11);
+   hdr->date = read_u32_le(data + 15);
+   hdr->file_attribute = data[19];
+   hdr->level_identifier = data[20];
+   switch (hdr->level_identifier) {
+      case 1:
+         hdr->l1.filename_length = data[21];
+         break;
+      case 2:
+         hdr->l2.uncompressed_crc = read_u16_le(data + 21);
+         hdr->l2.os_id = data[23];
+         hdr->l2.next_header_size = read_u16_le(data + 24);
+         break;
+   }
+}
+
 int dump_lha(const uint8_t *data, int offset)
 {
    char out_path[FILENAME_MAX];
    char extract_dir[FILENAME_MAX];
-   struct lha_header *hdr = (struct lha_header*)&data[offset];
+   struct lha_header hdr;
    char method[6];
    char date_str[128];
    time_t tt;
 
+   lha_header_parse(&hdr, &data[offset]);
+
    // confirm level
    printf("%08X: ", offset);
-   if (hdr->level_identifier == 2 || hdr->level_identifier == 1) {
-      printf("%04X ", hdr->header_length);
-      memcpy(method, hdr->method, sizeof(hdr->method));
-      method[sizeof(hdr->method)] = '\0';
+   if (hdr.level_identifier == 2 || hdr.level_identifier == 1) {
+      printf("%04X ", hdr.header_length);
+      memcpy(method, hdr.method, sizeof(hdr.method));
+      method[sizeof(hdr.method)] = '\0';
       printf("%s ", method);
-      printf("%d ", hdr->level_identifier);
-      printf("%08X ", hdr->compressed_size);
-      printf("%08X ", hdr->uncompressed_size);
-      tt = hdr->date;
+      printf("%d ", hdr.level_identifier);
+      printf("%08X ", hdr.compressed_size);
+      printf("%08X ", hdr.uncompressed_size);
+      tt = hdr.date;
       struct tm *utc_time = gmtime(&tt);
       strftime(date_str, sizeof(date_str), "%F %T %z", utc_time);
       printf("%s ", date_str);
 
-      switch (hdr->level_identifier) {
+      switch (hdr.level_identifier) {
          case 1:
          {
-            struct level1_header *l1hdr = (struct level1_header*)hdr;
-            printf("%02X\n", l1hdr->filename_length);
+            printf("%02X\n", hdr.l1.filename_length);
             break;
          }
             break;
          case 2:
          {
-            struct level2_header *l2hdr = (struct level2_header*)hdr;
-            printf("%c\n", l2hdr->os_id);
+            printf("%c\n", hdr.l2.os_id);
             break;
          }
       }
       // output LHA
       sprintf(out_path, "%s/%08X.lha", OUTPUT_DIR, offset);
-      write_file(out_path, &data[offset], hdr->compressed_size + hdr->header_length);
+      write_file(out_path, &data[offset], hdr.compressed_size + hdr.header_length);
 
       // extract LHA
       sprintf(extract_dir, "%s/%08X", OUTPUT_DIR, offset);
       make_dir(extract_dir);
       extract_lha(extract_dir, out_path);
    } else {
-      printf("Warning: unknown level identifier: %02X\n", hdr->level_identifier);
+      printf("Warning: unknown level identifier: %02X\n", hdr.level_identifier);
       return 0;
    }
    return 1;

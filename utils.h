@@ -27,7 +27,7 @@
 
 // read/write u32/16 big/little endian
 #define read_u32_be(buf) (unsigned int)(((buf)[0] << 24) + ((buf)[1] << 16) + ((buf)[2] << 8) + ((buf)[3]))
-#define read_u32_le(buf) (unsigned int)(((buf)[1] << 24) + ((buf)[0] << 16) + ((buf)[3] << 8) + ((buf)[2]))
+#define read_u32_le(buf) (unsigned int)(((buf)[3] << 24) + ((buf)[2] << 16) + ((buf)[1] << 8) + ((buf)[0]))
 #define write_u32_be(buf, val) do { \
    (buf)[0] = ((val) >> 24) & 0xFF; \
    (buf)[1] = ((val) >> 16) & 0xFF; \
@@ -35,6 +35,7 @@
    (buf)[3] = (val) & 0xFF; \
 } while(0)
 #define read_u16_be(buf) (((buf)[0] << 8) + ((buf)[1]))
+#define read_u16_le(buf) (((buf)[1] << 8) + ((buf)[0]))
 #define write_u16_be(buf, val) do { \
    (buf)[0] = ((val) >> 8) & 0xFF; \
    (buf)[1] = ((val)) & 0xFF; \
