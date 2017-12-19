@@ -43,7 +43,7 @@ struct lha_header
 void extract_lha(const char *dir, const char *file)
 {
    char command[FILENAME_MAX];
-   sprintf(command, "%s x -w %s %s", LHA_EXE, dir, file);
+   sprintf(command, "%s x -q -w %s %s", LHA_EXE, dir, file);
    int status = system(command);
    if (status) {
       printf("Error %d running %s\n", status, command);
@@ -94,7 +94,7 @@ int dump_lha(const uint8_t *data, int offset)
       printf("%08X ", hdr.uncompressed_size);
       tt = hdr.date;
       struct tm *utc_time = gmtime(&tt);
-      strftime(date_str, sizeof(date_str), "%F %T %z", utc_time);
+      strftime(date_str, sizeof(date_str), "%Y-%m-%d %H:%M:%S", utc_time);
       printf("%s ", date_str);
 
       switch (hdr.level_identifier) {
@@ -110,6 +110,7 @@ int dump_lha(const uint8_t *data, int offset)
             break;
          }
       }
+      fflush(stdout);
       // output LHA
       sprintf(out_path, "%s/%08X.lha", OUTPUT_DIR, offset);
       write_file(out_path, &data[offset], hdr.compressed_size + hdr.header_length);
